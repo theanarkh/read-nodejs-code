@@ -76,12 +76,13 @@ void Environment::Start(int argc,
                         bool start_profiler_idle_notifier) {
   HandleScope handle_scope(isolate());
   Context::Scope context_scope(context());
-
+  // 初始化uv_check_t结构体，对应check phase
   uv_check_init(event_loop(), immediate_check_handle());
+  // 清除UV__HANDLE_REF标记
   uv_unref(reinterpret_cast<uv_handle_t*>(immediate_check_handle()));
-
+  // 类似，对应idle phase
   uv_idle_init(event_loop(), immediate_idle_handle());
-
+  // 把u）check_t结构体加到loop里，并设置actived标记，uv_run的时候执行CheckImmediate回调
   uv_check_start(immediate_check_handle(), CheckImmediate);
 
   // Inform V8's CPU profiler when we're idle.  The profiler is sampling-based
@@ -93,6 +94,7 @@ void Environment::Start(int argc,
   // or check watcher runs first.  It's not 100% foolproof; if an add-on starts
   // a prepare or check watcher after us, any samples attributed to its callback
   // will be recorded with state=IDLE.
+  // 对应prepare phase
   uv_prepare_init(event_loop(), &idle_prepare_handle_);
   uv_check_init(event_loop(), &idle_check_handle_);
   uv_unref(reinterpret_cast<uv_handle_t*>(&idle_prepare_handle_));
@@ -105,7 +107,7 @@ void Environment::Start(int argc,
       static_cast<Environment*>(handle->data)->FinishHandleCleanup(handle);
     });
   };
-
+  // 注册进程退出时的回调
   RegisterHandleCleanup(
       reinterpret_cast<uv_handle_t*>(immediate_check_handle()),
       close_and_finish,
@@ -126,14 +128,41 @@ void Environment::Start(int argc,
   if (start_profiler_idle_notifier) {
     StartProfilerIdleNotifier();
   }
-
+  // 利用v8新建一个函数
   auto process_template = FunctionTemplate::New(isolate());
+  // 设置函数名
   process_template->SetClassName(FIXED_ONE_BYTE_STRING(isolate(), "process"));
-
+  // 利用函数new一个对象
   auto process_object =
       process_template->GetFunction()->NewInstance(context()).ToLocalChecked();
-  set_process_object(process_object);
+  /*
+    V(process_object, v8::Object)
 
+    env.h
+    成员属性宏定义
+    #define V(PropertyName, TypeName)                                             \
+      v8::Persistent<TypeName> PropertyName ## _;
+      ENVIRONMENT_STRONG_PERSISTENT_PROPERTIES(V)
+    #undef V
+  */
+  /*
+    函数宏定义
+    定义
+    inline void Environment::set_ ## PropertyName(v8::Local<TypeName> value) {  \
+      PropertyName ## _.Reset(isolate(), value);                                \
+    }
+    template <class T>
+    template <class S>
+    void PersistentBase<T>::Reset(Isolate* isolate, const Local<S>& other) {
+      TYPE_CHECK(T, S);
+      Reset();
+      if (other.IsEmpty()) return;
+      this->val_ = New(isolate, other.val_);
+    } 
+  */
+  // 设置env的一个属性，类似是Object，val是process_object
+  set_process_object(process_object);
+  // 设置process对象的属性
   SetupProcessObject(this, argc, argv, exec_argc, exec_argv);
   LoadAsyncWrapperInfo(this);
 }

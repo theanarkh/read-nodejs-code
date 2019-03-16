@@ -115,7 +115,7 @@ void HandleWrap::OnClose(uv_handle_t* handle) {
 
   const bool have_close_callback = (wrap->state_ == kClosingWithCallback);
   wrap->state_ = kClosed;
-
+  
   if (have_close_callback)
     wrap->MakeCallback(env->onclose_string(), 0, nullptr);
 

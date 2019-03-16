@@ -79,9 +79,10 @@ class TimerWrap : public HandleWrap {
   size_t self_size() const override { return sizeof(*this); }
 
  private:
-  static void SetImmediateCallback(const FunctionCallbackInfo<Value>& args) {
+static void SetImmediateCallback(const FunctionCallbackInfo<Value>& args) {
     CHECK(args[0]->IsFunction());
     auto env = Environment::GetCurrent(args);
+    // 保存回调函数
     env->set_immediate_callback_function(args[0].As<Function>());
     auto toggle_ref_cb = [] (const FunctionCallbackInfo<Value>& args) {
       Environment::GetCurrent(args)->ToggleImmediateRef(args[0]->IsTrue());

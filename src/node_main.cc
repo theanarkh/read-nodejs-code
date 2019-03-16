@@ -101,6 +101,7 @@ int main(int argc, char *argv[]) {
 #endif
   // Disable stdio buffering, it interacts poorly with printf()
   // calls elsewhere in the program (e.g., any logging from V8.)
+  // 设置流的缓冲方式
   setvbuf(stdout, nullptr, _IONBF, 0);
   setvbuf(stderr, nullptr, _IONBF, 0);
   return node::Start(argc, argv);

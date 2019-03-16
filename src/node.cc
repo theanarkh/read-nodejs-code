@@ -3285,6 +3285,7 @@ void LoadEnvironment(Environment* env) {
   // 'internal_bootstrap_node_native' is the string containing that source code.
   Local<String> script_name = FIXED_ONE_BYTE_STRING(env->isolate(),
                                                     "bootstrap_node.js");
+  // 执行bootstrap_node.js导出的函数
   Local<Value> f_value = ExecuteString(env, MainSource(env), script_name);
   if (try_catch.HasCaught())  {
     ReportException(env, try_catch);
@@ -3292,7 +3293,7 @@ void LoadEnvironment(Environment* env) {
   }
   // The bootstrap_node.js file returns a function 'f'
   CHECK(f_value->IsFunction());
-
+  
   Local<Function> f = Local<Function>::Cast(f_value);
 
   // Add a reference to the global object
@@ -3332,7 +3333,7 @@ void LoadEnvironment(Environment* env) {
   // who do not like how bootstrap_node.js sets up the module system but do
   // like Node's I/O bindings may want to replace 'f' with their own function.
   Local<Value> arg = env->process_object();
-
+  // 执行bootstrap_node.js 
   auto ret = f->Call(env->context(), Null(env->isolate()), 1, &arg);
   // If there was an error during bootstrap then it was either handled by the
   // FatalException handler or it's unrecoverable (e.g. max call stack
@@ -3963,18 +3964,28 @@ inline void PlatformInit() {
 #ifdef __POSIX__
 #if HAVE_INSPECTOR
   sigset_t sigmask;
+  // 清空信号
   sigemptyset(&sigmask);
+  // 设置信号
   sigaddset(&sigmask, SIGUSR1);
+  // 子线程继承了主线程的信号，这里设置sigmask里的信号只有主线程能收到
   const int err = pthread_sigmask(SIG_SETMASK, &sigmask, nullptr);
 #endif  // HAVE_INSPECTOR
 
   // Make sure file descriptors 0-2 are valid before we start logging anything.
+  // 保证进程打开标准输入、输出、错误流三个文件描述符
   for (int fd = STDIN_FILENO; fd <= STDERR_FILENO; fd += 1) {
     struct stat ignored;
+    // 返回0说明对应的文件描述符已经打开，则继续判断下一个
     if (fstat(fd, &ignored) == 0)
       continue;
     // Anything but EBADF means something is seriously wrong.  We don't
     // have to special-case EINTR, fstat() is not interruptible.
+    /*
+      EBADF说明fd是无效的文件描述符，说明还没打开，则接下来打开就行，
+      如果是其他的错误则说明出错了，EINTR在阻塞的系统调用被信号中断时返回，
+      fstate不是阻塞的调用，所以不需要处理
+    */
     if (errno != EBADF)
       ABORT();
     if (fd != open("/dev/null", O_RDWR))
@@ -3993,18 +4004,22 @@ inline void PlatformInit() {
   // The hard-coded upper limit is because NSIG is not very reliable; on Linux,
   // it evaluates to 32, 34 or 64, depending on whether RT signals are enabled.
   // Counting up to SIGRTMIN doesn't work for the same reason.
+  // 设置系统所有信号的处理函数，linux上最多32
   for (unsigned nr = 1; nr < kMaxSignal; nr += 1) {
+    // 进程不能忽略这两个信号 
     if (nr == SIGKILL || nr == SIGSTOP)
       continue;
+    // 忽略或者默认处理
     act.sa_handler = (nr == SIGPIPE) ? SIG_IGN : SIG_DFL;
     CHECK_EQ(0, sigaction(nr, &act, nullptr));
   }
 #endif  // !NODE_SHARED_MODE
-
+  // 注册这两个信号的处理函数
   RegisterSignalHandler(SIGINT, SignalExit, true);
   RegisterSignalHandler(SIGTERM, SignalExit, true);
 
   // Raise the open file descriptor limit.
+  // 设置进程能打开的最大文件数，算出最大值和最小值
   struct rlimit lim;
   if (getrlimit(RLIMIT_NOFILE, &lim) == 0 && lim.rlim_cur != lim.rlim_max) {
     // Do a binary search for the limit.
@@ -4094,14 +4109,17 @@ void Init(int* argc,
           int* exec_argc,
           const char*** exec_argv) {
   // Initialize prog_start_time to get relative uptime.
+  // 当前时间
   prog_start_time = static_cast<double>(uv_now(uv_default_loop()));
 
   // Register built-in modules
+  // 注册内置模块
   node::RegisterBuiltinModules();
 
   // Make inherited handles noninheritable.
+  // 设置文件描述符的cloexec标记，进程执行fork和exec后关闭有这个标记的文件
   uv_disable_stdio_inheritance();
-
+// 获取一大堆环境变量
 #if defined(NODE_V8_OPTIONS)
   // Should come before the call to V8::SetFlagsFromCommandLine()
   // so the user can disable a flag --foo at run-time by passing
@@ -4157,7 +4175,7 @@ void Init(int* argc,
     free(cstr);
   }
 #endif
-
+  // 命令行参数处理
   ProcessArgv(argc, argv, exec_argc, exec_argv);
 
 #if defined(NODE_HAVE_I18N_SUPPORT)
@@ -4333,12 +4351,15 @@ Local<Context> NewContext(Isolate* isolate,
 inline int Start(Isolate* isolate, IsolateData* isolate_data,
                  int argc, const char* const* argv,
                  int exec_argc, const char* const* exec_argv) {
+  // 见v8文档
   HandleScope handle_scope(isolate);
   Local<Context> context = NewContext(isolate);
   Context::Scope context_scope(context);
   Environment env(isolate_data, context);
+  // 创建线程私有化数据的键，每个线程通过该键读写数据，都是对应的内容是独立的
   CHECK_EQ(0, uv_key_create(&thread_local_env));
   uv_key_set(&thread_local_env, &env);
+  // 见env.cc的Start
   env.Start(argc, argv, exec_argc, exec_argv, v8_is_profiling);
 
   const char* path = argc > 1 ? argv[1] : nullptr;
@@ -4356,6 +4377,7 @@ inline int Start(Isolate* isolate, IsolateData* isolate_data,
   {
     Environment::AsyncCallbackScope callback_scope(&env);
     env.async_hooks()->push_async_ids(1, 0);
+    // 执行js脚步初始化
     LoadEnvironment(&env);
     env.async_hooks()->pop_async_id(1);
   }
@@ -4366,6 +4388,7 @@ inline int Start(Isolate* isolate, IsolateData* isolate_data,
     SealHandleScope seal(isolate);
     bool more;
     PERFORMANCE_MARK(&env, LOOP_START);
+    // 开启事件循环
     do {
       uv_run(env.event_loop(), UV_RUN_DEFAULT);
 
@@ -4438,6 +4461,7 @@ inline int Start(uv_loop_t* event_loop,
     if (track_heap_objects) {
       isolate->GetHeapProfiler()->StartTrackingHeapObjects(true);
     }
+    // 继续
     exit_code = Start(isolate, &isolate_data, argc, argv, exec_argc, exec_argv);
   }
 
@@ -4453,8 +4477,11 @@ inline int Start(uv_loop_t* event_loop,
 }
 
 int Start(int argc, char** argv) {
+  // 注册进程退出时的回调
   atexit([] () { uv_tty_reset_mode(); });
+  // 文件打开数和信号处理
   PlatformInit();
+  // 当前时间
   node::performance::performance_node_start = PERFORMANCE_NOW();
 
   CHECK_GT(argc, 0);
@@ -4466,6 +4493,7 @@ int Start(int argc, char** argv) {
   // optional, in case you're wondering.
   int exec_argc;
   const char** exec_argv;
+  // 见该函数
   Init(&argc, const_cast<const char**>(argv), &exec_argc, &exec_argv);
 
 #if HAVE_OPENSSL
@@ -4494,6 +4522,7 @@ int Start(int argc, char** argv) {
   V8::Initialize();
   node::performance::performance_v8_start = PERFORMANCE_NOW();
   v8_initialized = true;
+  // 继续初始化
   const int exit_code =
       Start(uv_default_loop(), argc, argv, exec_argc, exec_argv);
   if (trace_enabled) {
