@@ -160,7 +160,7 @@ void Environment::Start(int argc,
       this->val_ = New(isolate, other.val_);
     } 
   */
-  // 设置env的一个属性，类似是Object，val是process_object
+  // 设置env的一个属性，类型是Object，val是process_object
   set_process_object(process_object);
   // 设置process对象的属性
   SetupProcessObject(this, argc, argv, exec_argc, exec_argv);
