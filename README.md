@@ -1,5 +1,6 @@
-见https://blog.csdn.net/THEANARKH或关注公众号编程杂技
-
+csdn：https://blog.csdn.net/THEANARKH
+公众号：编程杂技
+知乎：https://zhuanlan.zhihu.com/c_1094251741922619392
 
 ### [nodejs的dns解析源码分析](https://blog.csdn.net/THEANARKH/article/details/88097138)
 ### [nodejs之setTimeout源码解析](https://blog.csdn.net/THEANARKH/article/details/88374203)
