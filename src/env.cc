@@ -82,7 +82,7 @@ void Environment::Start(int argc,
   uv_unref(reinterpret_cast<uv_handle_t*>(immediate_check_handle()));
   // 类似，对应idle phase
   uv_idle_init(event_loop(), immediate_idle_handle());
-  // 把u）check_t结构体加到loop里，并设置actived标记，uv_run的时候执行CheckImmediate回调
+  // 把uv_check_t结构体加到loop里，并设置actived标记，uv_run的时候执行CheckImmediate回调
   uv_check_start(immediate_check_handle(), CheckImmediate);
 
   // Inform V8's CPU profiler when we're idle.  The profiler is sampling-based

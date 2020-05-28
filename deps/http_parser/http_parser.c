@@ -870,22 +870,23 @@ reexecute:
         break;
 
       /* major HTTP version or dot */
-      // 解析完
+      // 解析主版本状态，目前http主版本是1，所以后面跟的就是.，这里支持版本号大于9的情况
       case s_res_http_major:
       {
+        // 遇到.则变成开始解析次版本状态
         if (ch == '.') {
           UPDATE_STATE(s_res_first_http_minor);
           break;
         }
-
+        // 版本号不是数字则报错
         if (!IS_NUM(ch)) {
           SET_ERRNO(HPE_INVALID_VERSION);
           goto error;
         }
-
+        // 版本号大于9的情况
         parser->http_major *= 10;
         parser->http_major += ch - '0';
-
+        // 主版本号不能大于999
         if (UNLIKELY(parser->http_major > 999)) {
           SET_ERRNO(HPE_INVALID_VERSION);
           goto error;
@@ -895,29 +896,33 @@ reexecute:
       }
 
       /* first digit of minor HTTP version */
+      // 开始解析次版本号
       case s_res_first_http_minor:
+        // 不是数字则报错
         if (UNLIKELY(!IS_NUM(ch))) {
           SET_ERRNO(HPE_INVALID_VERSION);
           goto error;
         }
-
+        // 记录次版本号的第一位
         parser->http_minor = ch - '0';
+        // 状态改成解析次版本号
         UPDATE_STATE(s_res_http_minor);
         break;
 
       /* minor HTTP version or end of request line */
       case s_res_http_minor:
       {
+        // 次版本号后面是空格则解析结束，进入开始解析返回码状态
         if (ch == ' ') {
           UPDATE_STATE(s_res_first_status_code);
           break;
         }
-
+        
         if (UNLIKELY(!IS_NUM(ch))) {
           SET_ERRNO(HPE_INVALID_VERSION);
           goto error;
         }
-
+        // 次版本号也支持大于9小于999
         parser->http_minor *= 10;
         parser->http_minor += ch - '0';
 
@@ -928,14 +933,16 @@ reexecute:
 
         break;
       }
-
+      // 开始解析返回码
       case s_res_first_status_code:
       {
+        // 返回码不是数字
         if (!IS_NUM(ch)) {
+          // 返回码是空格则跳过
           if (ch == ' ') {
             break;
           }
-
+          // 不是数字又不是空格则报错
           SET_ERRNO(HPE_INVALID_STATUS);
           goto error;
         }
@@ -943,30 +950,35 @@ reexecute:
         UPDATE_STATE(s_res_status_code);
         break;
       }
-
+      // 解析返回码状态
       case s_res_status_code:
-      {
+      { 
+        // 返回码第二个字符不是数字
         if (!IS_NUM(ch)) {
           switch (ch) {
+            // 是空格说明状态码解析完毕，进入解析返回码描述状态
             case ' ':
               UPDATE_STATE(s_res_status_start);
               break;
+            // 是回车，则说明http协议第一行准备结束，还差个换行
             case CR:
               UPDATE_STATE(s_res_line_almost_done);
               break;
+            // 是换行说明第一行解析完毕，进入开始解析http头阶段，即返回码描述为空
             case LF:
               UPDATE_STATE(s_header_field_start);
               break;
+            // 否则出错
             default:
               SET_ERRNO(HPE_INVALID_STATUS);
               goto error;
           }
           break;
         }
-
+        // 是数字则记录
         parser->status_code *= 10;
         parser->status_code += ch - '0';
-
+        // 状态码不能大于999
         if (UNLIKELY(parser->status_code > 999)) {
           SET_ERRNO(HPE_INVALID_STATUS);
           goto error;
@@ -974,32 +986,35 @@ reexecute:
 
         break;
       }
-
+      // 开始解析返回码描述
       case s_res_status_start:
       {
+        // http头解析接近结束，还差个换行
         if (ch == CR) {
           UPDATE_STATE(s_res_line_almost_done);
           break;
         }
-
+        // 返回码描述为空，直接进入开始解析http头状态
         if (ch == LF) {
           UPDATE_STATE(s_header_field_start);
           break;
         }
-
+        // 
         MARK(status);
+        // 进入解析返回码描述状态
         UPDATE_STATE(s_res_status);
         parser->index = 0;
         break;
       }
-
+      // 解析返回码描述
       case s_res_status:
+        // 遇到回车，还差一个换行则结束http第一行解析
         if (ch == CR) {
           UPDATE_STATE(s_res_line_almost_done);
           CALLBACK_DATA(status);
           break;
         }
-
+        // 第一行解析结束，进入开始解析http头状态
         if (ch == LF) {
           UPDATE_STATE(s_header_field_start);
           CALLBACK_DATA(status);
@@ -1007,19 +1022,22 @@ reexecute:
         }
 
         break;
-
+      // 还差个换行状态
       case s_res_line_almost_done:
+        // 不是换行则报错
         STRICT_CHECK(ch != LF);
+        // 进入开始解析http头状态
         UPDATE_STATE(s_header_field_start);
         break;
-
+      // 开始解析http请求报文的第一行
       case s_start_req:
       {
+        // 跳过
         if (ch == CR || ch == LF)
           break;
         parser->flags = 0;
         parser->content_length = ULLONG_MAX;
-
+        // 不是字母则报错
         if (UNLIKELY(!IS_ALPHA(ch))) {
           SET_ERRNO(HPE_INVALID_METHOD);
           goto error;
@@ -1027,6 +1045,7 @@ reexecute:
 
         parser->method = (enum http_method) 0;
         parser->index = 1;
+        // 根据请求方法的第一个字母判断http方法
         switch (ch) {
           case 'A': parser->method = HTTP_ACL; break;
           case 'B': parser->method = HTTP_BIND; break;
@@ -1049,33 +1068,36 @@ reexecute:
             SET_ERRNO(HPE_INVALID_METHOD);
             goto error;
         }
+        // 解析http方法状态
         UPDATE_STATE(s_req_method);
 
         CALLBACK_NOTIFY(message_begin);
 
         break;
       }
-
+      // 解析http方法状态(已经解析完第一个字符)
       case s_req_method:
       {
         const char *matcher;
+        // 非法字符
         if (UNLIKELY(ch == '\0')) {
           SET_ERRNO(HPE_INVALID_METHOD);
           goto error;
         }
-
+        // 通过索引拿到一个http方法对应的字符串，比如GET
         matcher = method_strings[parser->method];
+        // ch是空格并且刚好到达对应http方法字符串的尾巴，则解析完成，进入开始解析url状态
         if (ch == ' ' && matcher[parser->index] == '\0') {
           UPDATE_STATE(s_req_spaces_before_url);
-        } else if (ch == matcher[parser->index]) {
+        } else if (ch == matcher[parser->index]) { // 还没有到达预期字符串的尾巴，即还没匹配完
           ; /* nada */
-        } else if (IS_ALPHA(ch)) {
+        } else if (IS_ALPHA(ch)) { // 到达了预期字符串的尾巴，但是还没有出现空格，说明前面的匹配错误，重新判断
 
           switch (parser->method << 16 | parser->index << 8 | ch) {
 #define XX(meth, pos, ch, new_meth) \
             case (HTTP_##meth << 16 | pos << 8 | ch): \
               parser->method = HTTP_##new_meth; break;
-
+            // case (HTTP_POST << 16 | 1 << 8 | 'U'): parser->method = HTTP_PUT; break;
             XX(POST,      1, 'U', PUT)
             XX(POST,      1, 'A', PATCH)
             XX(CONNECT,   1, 'H', CHECKOUT)
@@ -1111,16 +1133,17 @@ reexecute:
         ++parser->index;
         break;
       }
-
+      // 解析完http方法，开始解析url
       case s_req_spaces_before_url:
       {
         if (ch == ' ') break;
 
         MARK(url);
+        // 如果是connect方法，则直接进入解析服务器信息状态，即不解析协议
         if (parser->method == HTTP_CONNECT) {
           UPDATE_STATE(s_req_server_start);
         }
-
+        // 进入解析url状态
         UPDATE_STATE(parse_url_char(CURRENT_STATE(), ch));
         if (UNLIKELY(CURRENT_STATE() == s_dead)) {
           SET_ERRNO(HPE_INVALID_URL);
@@ -1129,7 +1152,7 @@ reexecute:
 
         break;
       }
-
+      // 解析http(s)://，直接调用解析url函数
       case s_req_schema:
       case s_req_schema_slash:
       case s_req_schema_slash_slash:
@@ -1152,7 +1175,7 @@ reexecute:
 
         break;
       }
-
+      // 解析url中http://后面的信息
       case s_req_server:
       case s_req_server_with_at:
       case s_req_path:
@@ -1162,20 +1185,24 @@ reexecute:
       case s_req_fragment:
       {
         switch (ch) {
+          // 遇到空格则进入开始解析http版本状态
           case ' ':
             UPDATE_STATE(s_req_http_start);
             CALLBACK_DATA(url);
             break;
+          // 直接遇到回车换行则使用默认http版本
           case CR:
           case LF:
             parser->http_major = 0;
             parser->http_minor = 9;
+            // 遇到回车则还需要个换行，遇到换行则进入开始解析http头状态
             UPDATE_STATE((ch == CR) ?
               s_req_line_almost_done :
               s_header_field_start);
             CALLBACK_DATA(url);
             break;
           default:
+            // 其他字符则继续解析url
             UPDATE_STATE(parse_url_char(CURRENT_STATE(), ch));
             if (UNLIKELY(CURRENT_STATE() == s_dead)) {
               SET_ERRNO(HPE_INVALID_URL);
@@ -1184,7 +1211,7 @@ reexecute:
         }
         break;
       }
-
+      // 开始解析请求头的http协议版本，下面的case都是在解析请求头的http版本
       case s_req_http_start:
         switch (ch) {
           case 'H':
@@ -1306,21 +1333,26 @@ reexecute:
         UPDATE_STATE(s_header_field_start);
         break;
       }
-
+      // 开始解析http头
       case s_header_field_start:
       {
+        /*
+          遇到回车，可能是一个http头结束，
+          也可能是整个http头解析结束，这里假设是整个头结束，
+          如果遇到合法http头字符，则再修改状态
+        */
         if (ch == CR) {
           UPDATE_STATE(s_headers_almost_done);
           break;
         }
-
+        // 同上
         if (ch == LF) {
           /* they might be just sending \n instead of \r\n so this would be
            * the second \n to denote the end of headers*/
           UPDATE_STATE(s_headers_almost_done);
           REEXECUTE();
         }
-
+        // 拿到对应的字符
         c = TOKEN(ch);
 
         if (UNLIKELY(!c)) {
@@ -1331,8 +1363,9 @@ reexecute:
         MARK(header_field);
 
         parser->index = 0;
+        // 解析头部状态
         UPDATE_STATE(s_header_field);
-
+        // 根据http头的key的第一个字符做某些判断
         switch (c) {
           case 'c':
             parser->header_state = h_C;
@@ -1356,7 +1389,7 @@ reexecute:
         }
         break;
       }
-
+      // 解析http头的key
       case s_header_field:
       {
         const char* start = p;
@@ -1368,28 +1401,34 @@ reexecute:
             break;
 
           switch (parser->header_state) {
+            // 一般的头，继续
             case h_general:
               break;
-
+            // 特殊头
             case h_C:
               parser->index++;
+              // 等于哦则更新状态为h_CO，否则恢复成一般的头
               parser->header_state = (c == 'o' ? h_CO : h_general);
               break;
-
+            // 同上
             case h_CO:
               parser->index++;
               parser->header_state = (c == 'n' ? h_CON : h_general);
               break;
-
+            // key是con
             case h_CON:
               parser->index++;
+              // 根据下一个字符继续判断
               switch (c) {
+                // conn
                 case 'n':
                   parser->header_state = h_matching_connection;
                   break;
+                // cont
                 case 't':
                   parser->header_state = h_matching_content_length;
                   break;
+                // 恢复为一般头
                 default:
                   parser->header_state = h_general;
                   break;
@@ -1400,10 +1439,11 @@ reexecute:
 
             case h_matching_connection:
               parser->index++;
+              // 不等于connecttion则恢复为一般头
               if (parser->index > sizeof(CONNECTION)-1
                   || c != CONNECTION[parser->index]) {
                 parser->header_state = h_general;
-              } else if (parser->index == sizeof(CONNECTION)-2) {
+              } else if (parser->index == sizeof(CONNECTION)-2) { 
                 parser->header_state = h_connection;
               }
               break;
@@ -1428,6 +1468,7 @@ reexecute:
                   || c != CONTENT_LENGTH[parser->index]) {
                 parser->header_state = h_general;
               } else if (parser->index == sizeof(CONTENT_LENGTH)-2) {
+                // 已经设置过了，重复头报错
                 if (parser->flags & F_CONTENTLENGTH) {
                   SET_ERRNO(HPE_UNEXPECTED_CONTENT_LENGTH);
                   goto error;
@@ -1480,7 +1521,7 @@ reexecute:
           --p;
           break;
         }
-
+        // 遇到:则key解析结束，开始解析value
         if (ch == ':') {
           UPDATE_STATE(s_header_value_discard_ws);
           CALLBACK_DATA(header_field);
@@ -1754,7 +1795,7 @@ reexecute:
           --p;
         break;
       }
-
+    
       case s_header_almost_done:
       {
         if (UNLIKELY(ch != LF)) {
