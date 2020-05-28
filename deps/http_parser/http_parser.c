@@ -170,7 +170,7 @@ do {                                                                 \
 #define KEEP_ALIVE "keep-alive"
 #define CLOSE "close"
 
-
+// 定义http方法#string="string","GET", "POST"...
 static const char *method_strings[] =
   {
 #define XX(num, name, string) #string,
@@ -281,7 +281,9 @@ enum state
 
   , s_start_req_or_res
   , s_res_or_resp_H
+  // 开始响应请求
   , s_start_res
+  // 响应头的http和版本号
   , s_res_H
   , s_res_HT
   , s_res_HTT
@@ -290,47 +292,70 @@ enum state
   , s_res_http_major
   , s_res_first_http_minor
   , s_res_http_minor
+  // 开始设置响应报文状态码
   , s_res_first_status_code
+  //  设置响应头状态码
   , s_res_status_code
+  //  开始设置响应报文的状态字符串
   , s_res_status_start
   , s_res_status
   , s_res_line_almost_done
 
   , s_start_req
-
+  // 请求方法
   , s_req_method
+  // 方法和url之前的字符串
   , s_req_spaces_before_url
+  // 协议
   , s_req_schema
+  // 协议后面的第一个斜杠
   , s_req_schema_slash
+  // 协议后面的第二个斜杠
   , s_req_schema_slash_slash
+  // 开始解析服务器信息状态
   , s_req_server_start
+  // 解析host
   , s_req_server
+  // 解析@字符，@user:password
   , s_req_server_with_at
+  // 解析路径
   , s_req_path
+  // 开始解析query参数
   , s_req_query_string_start
+  // 解析query参数
   , s_req_query_string
+  // 开始解析锚点
   , s_req_fragment_start
+  // 解析锚点
   , s_req_fragment
+  // 开始解析协议版本
   , s_req_http_start
+  // 解析HTTP四个字符
   , s_req_http_H
   , s_req_http_HT
   , s_req_http_HTT
   , s_req_http_HTTP
+  // 解析http版本（主版本，次版本）
   , s_req_first_http_major
   , s_req_http_major
   , s_req_first_http_minor
   , s_req_http_minor
+  // 解析完http包第一行
   , s_req_line_almost_done
-
+  // 开始解析http头
   , s_header_field_start
+  // http头的key
   , s_header_field
+  // http头的值
   , s_header_value_discard_ws
   , s_header_value_discard_ws_almost_done
   , s_header_value_discard_lws
+  // 开始解析http头的值
   , s_header_value_start
+  // 解析http头的值
   , s_header_value
   , s_header_value_lws
-
+  // 解析http头完毕
   , s_header_almost_done
 
   , s_chunk_size_start
@@ -389,20 +414,29 @@ enum header_states
   , h_connection_close
   , h_connection_upgrade
   };
-
+// 代表host字段的状态
 enum http_host_state
   {
     s_http_host_dead = 1
+  // 开始解析用户密码状态
   , s_http_userinfo_start
+  // 解析用户密码状态，即遇到了第一个符合的字符
   , s_http_userinfo
+  // 开始解析host
   , s_http_host_start
+  // 开始解析v6地址，host部分可能是ip
   , s_http_host_v6_start
+  // 解析host状态
   , s_http_host
+  // 解析ipv6状态
   , s_http_host_v6
+  // 解析v6完毕
   , s_http_host_v6_end
   , s_http_host_v6_zone_start
   , s_http_host_v6_zone
+  // 开始解析端口
   , s_http_host_port_start
+  // 解析端口状态，即遇到了第一个符合的字符
   , s_http_host_port
 };
 
@@ -497,40 +531,44 @@ parse_url_char(enum state s, const char ch)
 #endif
 
   switch (s) {
+    // 准备解析http请求第一行的url部分
     case s_req_spaces_before_url:
       /* Proxied requests are followed by scheme of an absolute URI (alpha).
        * All methods except CONNECT are followed by '/' or '*'.
        */
-
+      // 遇到/说明是相对url，进入解析路径状态
       if (ch == '/' || ch == '*') {
         return s_req_path;
       }
-
+      // 遇到字母说明是绝对url，进入解析协议状态
       if (IS_ALPHA(ch)) {
         return s_req_schema;
       }
-
+      // url不是以上字符开头则报错
       break;
-
+    // 正在解析协议
     case s_req_schema:
+      // 还是字母，则还是维护状态
       if (IS_ALPHA(ch)) {
         return s;
       }
-
+      // 遇到冒号说明解析协议结束，进入解析第一个斜杆状态
       if (ch == ':') {
         return s_req_schema_slash;
       }
 
       break;
-
+    // 解析第一个协议状态
     case s_req_schema_slash:
+      // 遇到了一个斜杆，则进入解析第二个斜杆状态
       if (ch == '/') {
         return s_req_schema_slash_slash;
       }
-
+      // 如果不是斜杆则报错
       break;
-
+    // 解析第二个斜杆
     case s_req_schema_slash_slash:
+      // 遇到的是一个斜杆，则进入解析host状态，否则报错
       if (ch == '/') {
         return s_req_server_start;
       }
@@ -543,16 +581,18 @@ parse_url_char(enum state s, const char ch)
       }
 
     /* FALLTHROUGH */
+    // 解析服务器信息状态
     case s_req_server_start:
     case s_req_server:
+      // 遇到斜杆，说明服务器信息解析完毕，进入解析路径状态
       if (ch == '/') {
         return s_req_path;
       }
-
+      // 遇到？则变成开始解析query参数状态
       if (ch == '?') {
         return s_req_query_string_start;
       }
-
+      // 遇到@则进入解析用户名密码状态
       if (ch == '@') {
         return s_req_server_with_at;
       }
@@ -562,12 +602,13 @@ parse_url_char(enum state s, const char ch)
       }
 
       break;
-
+    // 解析路径状态
     case s_req_path:
+      // 合法字符，则维护状态
       if (IS_URL_CHAR(ch)) {
         return s;
       }
-
+      // 遇到了？则进入解析query参数状态，遇到#则进入解析锚点状态
       switch (ch) {
         case '?':
           return s_req_query_string_start;
@@ -577,44 +618,49 @@ parse_url_char(enum state s, const char ch)
       }
 
       break;
-
+    // 解析query参数
     case s_req_query_string_start:
     case s_req_query_string:
+      // 是合法的url字符，则维护状态
       if (IS_URL_CHAR(ch)) {
         return s_req_query_string;
       }
 
       switch (ch) {
+        // 允许query字符里有？，当做数据处理
         case '?':
           /* allow extra '?' in query string */
           return s_req_query_string;
-
+        // 遇到锚点则变成解析锚点状态
         case '#':
           return s_req_fragment_start;
       }
 
       break;
-
+    // 开始解析锚点
     case s_req_fragment_start:
+      // 是合法的url字符则变成解析锚点状态
       if (IS_URL_CHAR(ch)) {
         return s_req_fragment;
       }
 
       switch (ch) {
+        // 锚点里允许?
         case '?':
           return s_req_fragment;
-
+        // 允许#后面又是#
         case '#':
           return s;
       }
 
       break;
-
+    // 解析锚点
     case s_req_fragment:
+      // 合法字符则维护状态
       if (IS_URL_CHAR(ch)) {
         return s;
       }
-
+      // 锚点里允许下面两个字符
       switch (ch) {
         case '?':
         case '#':
@@ -631,6 +677,11 @@ parse_url_char(enum state s, const char ch)
   return s_dead;
 }
 
+/*
+  settings 回调钩子
+  data 待解析的数据
+  len 数据长度
+*/
 size_t http_parser_execute (http_parser *parser,
                             const http_parser_settings *settings,
                             const char *data,
@@ -701,8 +752,9 @@ size_t http_parser_execute (http_parser *parser,
 
   for (p=data; p != data + len; p++) {
     ch = *p;
-
+    // 正在解析http头
     if (PARSING_HEADER(CURRENT_STATE()))
+      // http头是否过大，是则报错
       COUNT_HEADER_SIZE(1);
 
 reexecute:
@@ -717,19 +769,23 @@ reexecute:
 
         SET_ERRNO(HPE_CLOSED_CONNECTION);
         goto error;
-
+      // 开始解析收到的客户端http包或者服务器返回的回包
       case s_start_req_or_res:
       {
+        // 跳过无效字符
         if (ch == CR || ch == LF)
           break;
+        // 初始化标记
         parser->flags = 0;
         parser->content_length = ULLONG_MAX;
-
+        // 遇到H
         if (ch == 'H') {
+          // 进入s_res_or_resp_H
           UPDATE_STATE(s_res_or_resp_H);
-
+          // 通知上层，触发on_message_begin回调
           CALLBACK_NOTIFY(message_begin);
         } else {
+          // 不是H说明nodejs作为客户端的请求包，因为http回复包是以H开头的，但是以H开头的不一定是回复包，比如HEAD请求
           parser->type = HTTP_REQUEST;
           UPDATE_STATE(s_start_req);
           REEXECUTE();
@@ -737,34 +793,37 @@ reexecute:
 
         break;
       }
-
+      // 遇到了第一个H
       case s_res_or_resp_H:
+        // 第二个是T，说明是回复包，设置状态为s_res_HT
         if (ch == 'T') {
           parser->type = HTTP_RESPONSE;
           UPDATE_STATE(s_res_HT);
         } else {
+          // 第二个不是T也不是E说明报文无效，报错
           if (UNLIKELY(ch != 'E')) {
             SET_ERRNO(HPE_INVALID_CONSTANT);
             goto error;
           }
-
+          // 以HE开头，说明是HEAD，请求包
           parser->type = HTTP_REQUEST;
           parser->method = HTTP_HEAD;
           parser->index = 2;
+          // 进入解析method状态
           UPDATE_STATE(s_req_method);
         }
         break;
-
+      // 开始解析响应包状态
       case s_start_res:
       {
         parser->flags = 0;
         parser->content_length = ULLONG_MAX;
-
+        // 遇到了H，进入s_res_HT状态，等待T
         switch (ch) {
           case 'H':
             UPDATE_STATE(s_res_H);
             break;
-
+          // 跳过换车换行字符
           case CR:
           case LF:
             break;
@@ -777,12 +836,13 @@ reexecute:
         CALLBACK_NOTIFY(message_begin);
         break;
       }
-
+      // 解析回复包H状态
       case s_res_H:
+        // 下一个应该是T，否则报错，是的话变成s_res_HT状态
         STRICT_CHECK(ch != 'T');
         UPDATE_STATE(s_res_HT);
         break;
-
+      // 下面两个类似，即回复包的HTTP/1.X
       case s_res_HT:
         STRICT_CHECK(ch != 'T');
         UPDATE_STATE(s_res_HTT);
@@ -797,18 +857,20 @@ reexecute:
         STRICT_CHECK(ch != '/');
         UPDATE_STATE(s_res_first_http_major);
         break;
-
+      // 开始解析http版本状态
       case s_res_first_http_major:
+        // 不是数字则报错
         if (UNLIKELY(ch < '0' || ch > '9')) {
           SET_ERRNO(HPE_INVALID_VERSION);
           goto error;
         }
-
+        // 算出数字，作为主版本号
         parser->http_major = ch - '0';
         UPDATE_STATE(s_res_http_major);
         break;
 
       /* major HTTP version or dot */
+      // 解析完
       case s_res_http_major:
       {
         if (ch == '.') {
@@ -2168,75 +2230,88 @@ http_errno_description(enum http_errno err) {
   assert(((size_t) err) < ARRAY_SIZE(http_strerror_tab));
   return http_strerror_tab[err].description;
 }
-
+// s状态，遇到ch，判断下一个状态
 static enum http_host_state
 http_parse_host_char(enum http_host_state s, const char ch) {
   switch(s) {
+    // 解析用户名密码状态
     case s_http_userinfo:
     case s_http_userinfo_start:
+      // 遇到@则说明用户名密码解析完毕，进入开始解析host状态
       if (ch == '@') {
         return s_http_host_start;
       }
-
+      // 不是@，是合法的用户名密码字符，则维护状态，否则报错
       if (IS_USERINFO_CHAR(ch)) {
         return s_http_userinfo;
       }
       break;
-
+    // 开始解析host状态
     case s_http_host_start:
+      // 遇到了[，进入开始解析ipv6格式
       if (ch == '[') {
         return s_http_host_v6_start;
       }
-
+      // 是合法的host字符，则进入解析一般host格式状态
       if (IS_HOST_CHAR(ch)) {
         return s_http_host;
       }
 
       break;
-
+    // 解析host状态
     case s_http_host:
+      // 遇到host合法字符，则维护状态
       if (IS_HOST_CHAR(ch)) {
         return s_http_host;
       }
-
+    /*
+      正在解析host，遇到了一个不合法的host字符，再判断是不是“:”字符，
+      是的话说明解析域名或ip部分解析，进入解析端口状态，case没有break
+      的时候会一直往下执行，不管下面的case xxx是啥
+    */
     /* FALLTHROUGH */
     case s_http_host_v6_end:
+      // 解析完域名或ip部分，遇到“:”则进入开始解析端口状态
       if (ch == ':') {
         return s_http_host_port_start;
       }
 
       break;
-
+    // 解析ipv6 host
     case s_http_host_v6:
+      // 遇到]则进入解析ipv6结束状态
       if (ch == ']') {
         return s_http_host_v6_end;
       }
-
+    // 开始解析ipv6，或者正在解析ipv6（上面的case）
     /* FALLTHROUGH */
     case s_http_host_v6_start:
+      // 合法的ipv6字符
       if (IS_HEX(ch) || ch == ':' || ch == '.') {
         return s_http_host_v6;
       }
-
+      // ipv6非第一个字符如果是%则进入zone_start状态
       if (s == s_http_host_v6 && ch == '%') {
         return s_http_host_v6_zone_start;
       }
       break;
-
+    // 解析zone状态（ipv6的特性）
     case s_http_host_v6_zone:
+      // 遇到]则进入解析ipv6结束状态
       if (ch == ']') {
         return s_http_host_v6_end;
       }
-
+    // 开始解析zone，或者正在解析zone
     /* FALLTHROUGH */
     case s_http_host_v6_zone_start:
       /* RFC 6874 Zone ID consists of 1*( unreserved / pct-encoded) */
+      // 合法的zone字符则维持状态或进入解析zone状态
       if (IS_ALPHANUM(ch) || ch == '%' || ch == '.' || ch == '-' || ch == '_' ||
           ch == '~') {
         return s_http_host_v6_zone;
       }
       break;
-
+    // 开始解析端口或者正在解析端口，遇到合法的字符都进入正在解析端口状态
     case s_http_host_port:
     case s_http_host_port_start:
       if (IS_NUM(ch)) {
@@ -2250,56 +2325,65 @@ http_parse_host_char(enum http_host_state s, const char ch) {
   }
   return s_http_host_dead;
 }
-
+// 解析host
 static int
 http_parse_host(const char * buf, struct http_parser_url *u, int found_at) {
   assert(u->field_set & (1 << UF_HOST));
   enum http_host_state s;
 
   const char *p;
+  // 拿到host部分的数据
   size_t buflen = u->field_data[UF_HOST].off + u->field_data[UF_HOST].len;
 
   u->field_data[UF_HOST].len = 0;
-
+  // 有没有用户密码部分，有则从解析用户密码信息状态开始，否则从解析host开始
   s = found_at ? s_http_userinfo_start : s_http_host_start;
-
+  // 逐个遍历host部分的字符
   for (p = buf + u->field_data[UF_HOST].off; p < buf + buflen; p++) {
+    // 根据当前字符*p，判断下一个状态
     enum http_host_state new_s = http_parse_host_char(s, *p);
-
+    // 解析host出错
     if (new_s == s_http_host_dead) {
       return 1;
     }
 
     switch(new_s) {
+      // 下一个状态是解析host
       case s_http_host:
+        // 前一个状态和下一个不相等，说明刚刚进入解析host状态，记录开始字符
         if (s != s_http_host) {
           u->field_data[UF_HOST].off = p - buf;
         }
+        // 长度累加
         u->field_data[UF_HOST].len++;
         break;
-
+      // 同上
       case s_http_host_v6:
         if (s != s_http_host_v6) {
           u->field_data[UF_HOST].off = p - buf;
         }
         u->field_data[UF_HOST].len++;
         break;
-
+      // 两个状态都属于host部分，内容长度累加
       case s_http_host_v6_zone_start:
       case s_http_host_v6_zone:
         u->field_data[UF_HOST].len++;
         break;
-
+      // 进入解析端口状态
       case s_http_host_port:
+        // 不相等说明刚进入该状态
         if (s != s_http_host_port) {
+          // 记录数据位置和初始化长度
           u->field_data[UF_PORT].off = p - buf;
           u->field_data[UF_PORT].len = 0;
+          // 设置有端口标记
           u->field_set |= (1 << UF_PORT);
         }
         u->field_data[UF_PORT].len++;
         break;
-
+      // 用户名密码状态
       case s_http_userinfo:
+        // 同上
         if (s != s_http_userinfo) {
           u->field_data[UF_USERINFO].off = p - buf ;
           u->field_data[UF_USERINFO].len = 0;
@@ -2315,6 +2399,7 @@ http_parse_host(const char * buf, struct http_parser_url *u, int found_at) {
   }
 
   /* Make sure we don't end somewhere unexpected */
+  // 最后一个状态如果是命中下面的case则报错
   switch (s) {
     case s_http_host_start:
     case s_http_host_v6_start:
@@ -2337,6 +2422,12 @@ http_parser_url_init(struct http_parser_url *u) {
   memset(u, 0, sizeof(*u));
 }
 
+/*
+  buf url的内容
+  buflen url长度
+  is_connect 是否是connect方法
+  u 保存解析结果
+*/
 int
 http_parser_parse_url(const char *buf, size_t buflen, int is_connect,
                       struct http_parser_url *u)
@@ -2345,16 +2436,19 @@ http_parser_parse_url(const char *buf, size_t buflen, int is_connect,
   const char *p;
   enum http_parser_url_fields uf, old_uf;
   int found_at = 0;
-
+  // 初始化结构体的字段
   u->port = u->field_set = 0;
+  // connect方法的话直接解析host部分，否则解析方法后面的url
   s = is_connect ? s_req_server_start : s_req_spaces_before_url;
   old_uf = UF_MAX;
-
+  // 遍历字符串
   for (p = buf; p < buf + buflen; p++) {
+    // s是当前状态，遇到*p对应的字符后，返回下一个状态
     s = parse_url_char(s, *p);
 
     /* Figure out the next field that we're operating on */
     switch (s) {
+      // 解析出错
       case s_dead:
         return 1;
 
@@ -2365,27 +2459,28 @@ http_parser_parse_url(const char *buf, size_t buflen, int is_connect,
       case s_req_query_string_start:
       case s_req_fragment_start:
         continue;
-
+      // 开始解析协议，即遇到协议内容的第一个字符了
       case s_req_schema:
         uf = UF_SCHEMA;
         break;
-
+      // 遇到了@字符
       case s_req_server_with_at:
         found_at = 1;
 
       /* FALLTROUGH */
+      // 遇到了@或者遇到了服务器信息相关的字符则说明有host
       case s_req_server:
         uf = UF_HOST;
         break;
-
+      // 有路径
       case s_req_path:
         uf = UF_PATH;
         break;
-
+      // 有query参数
       case s_req_query_string:
         uf = UF_QUERY;
         break;
-
+      // 有锚点
       case s_req_fragment:
         uf = UF_FRAGMENT;
         break;
@@ -2396,25 +2491,29 @@ http_parser_parse_url(const char *buf, size_t buflen, int is_connect,
     }
 
     /* Nothing's changed; soldier on */
+    // old_uf代表上一个状态，状态不变，该字段的内容长度加一
     if (uf == old_uf) {
       u->field_data[uf].len++;
       continue;
     }
-
+    // 否则说明进入了下一个状态，p是当前字符（即导致状态变更的字符），off记录下一个状态的起始字符的地址
     u->field_data[uf].off = p - buf;
+    // 刚进入下一个状态，内容长度是1
     u->field_data[uf].len = 1;
-
+    // url中有某个字符，设置标记
     u->field_set |= (1 << uf);
+    // 记录上一个状态
     old_uf = uf;
   }
 
   /* host must be present if there is a schema */
   /* parsing http:///toto will fail */
+  // 有协议，没有host，则报错
   if ((u->field_set & (1 << UF_SCHEMA)) &&
       (u->field_set & (1 << UF_HOST)) == 0) {
     return 1;
   }
-
+  // 有host则解析host
   if (u->field_set & (1 << UF_HOST)) {
     if (http_parse_host(buf, u, found_at) != 0) {
       return 1;
@@ -2422,10 +2521,11 @@ http_parser_parse_url(const char *buf, size_t buflen, int is_connect,
   }
 
   /* CONNECT requests can only contain "hostname:port" */
+  // connect方法只能设置两个字段
   if (is_connect && u->field_set != ((1 << UF_HOST)|(1 << UF_PORT))) {
     return 1;
   }
-
+  // 如果设置了端口，则校验端口
   if (u->field_set & (1 << UF_PORT)) {
     /* Don't bother with endp; we've already validated the string */
     unsigned long v = strtoul(buf + u->field_data[UF_PORT].off, NULL, 10);
