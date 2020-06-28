@@ -326,7 +326,7 @@ int uv_tcp_listen(uv_tcp_t* tcp, int backlog, uv_connection_cb cb) {
 
   if (tcp->delayed_error)
     return tcp->delayed_error;
-
+  // 是否accept后，等待一段时间再accept，否则就是连续accept
   if (single_accept == -1) {
     const char* val = getenv("UV_TCP_SINGLE_ACCEPT");
     single_accept = (val != NULL && atoi(val) != 0);  /* Off by default. */
@@ -346,15 +346,17 @@ int uv_tcp_listen(uv_tcp_t* tcp, int backlog, uv_connection_cb cb) {
   err = maybe_new_socket(tcp, AF_INET, flags);
   if (err)
     return err;
-
+  // 设置socket为监听状态
   if (listen(tcp->io_watcher.fd, backlog))
     return -errno;
-
+  // 设置有连接完成时的回调
   tcp->connection_cb = cb;
   tcp->flags |= UV_HANDLE_BOUND;
 
   /* Start listening for connections. */
+  // 有连接到来时libuv层的回调，connection_cb为业务回调，被libuv调用
   tcp->io_watcher.cb = uv__server_io;
+  // 注册io观察者到事件循环的io观察者队列，设置等待读事件
   uv__io_start(tcp->loop, &tcp->io_watcher, POLLIN);
 
   return 0;

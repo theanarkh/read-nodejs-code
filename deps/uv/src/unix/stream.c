@@ -530,7 +530,7 @@ void uv__server_io(uv_loop_t* loop, uv__io_t* w, unsigned int events) {
     if (w->rcount <= 0)
       return;
 #endif /* defined(UV_HAVE_KQUEUE) */
-
+    // 摘下一个已完成三次握手的连接
     err = uv__accept(uv__stream_fd(stream));
     if (err < 0) {
       if (err == -EAGAIN || err == -EWOULDBLOCK)
@@ -550,9 +550,11 @@ void uv__server_io(uv_loop_t* loop, uv__io_t* w, unsigned int events) {
     }
 
     UV_DEC_BACKLOG(w)
+    // 记录拿到的通信socket对应的fd
     stream->accepted_fd = err;
+    // 执行上传回调
     stream->connection_cb(stream, 0);
-
+    // accept成功，则等待用户消费accepted_fd再accept，这里撤销事件
     if (stream->accepted_fd != -1) {
       /* The user hasn't yet accepted called uv_accept() */
       uv__io_stop(loop, &stream->io_watcher, POLLIN);
@@ -582,6 +584,7 @@ int uv_accept(uv_stream_t* server, uv_stream_t* client) {
   switch (client->type) {
     case UV_NAMED_PIPE:
     case UV_TCP:
+      // 把文件描述符保存到client
       err = uv__stream_open(client,
                             server->accepted_fd,
                             UV_STREAM_READABLE | UV_STREAM_WRITABLE);
