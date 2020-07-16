@@ -73,7 +73,10 @@ void TCPWrap::Initialize(Local<Object> target,
                          Local<Value> unused,
                          Local<Context> context) {
   Environment* env = Environment::GetCurrent(context);
-
+  /*
+    new TCP时，v8会新建一个c++对象，然后传进New函数，
+    然后执行New函数，New函数的入参args的args.This()就是该c++对象
+  */
   Local<FunctionTemplate> t = env->NewFunctionTemplate(New);
   Local<String> tcpString = FIXED_ONE_BYTE_STRING(env->isolate(), "TCP");
   t->SetClassName(tcpString);
@@ -119,6 +122,7 @@ void TCPWrap::Initialize(Local<Object> target,
   // Create FunctionTemplate for TCPConnectWrap.
   auto constructor = [](const FunctionCallbackInfo<Value>& args) {
     CHECK(args.IsConstructCall());
+    // args.This()是TCPConnectWrap对象。clearWrap是清除关联的对象（SetAlignedPointerInInternalField(0, null)）
     ClearWrap(args.This());
   };
   auto cwt = FunctionTemplate::New(env->isolate(), constructor);
@@ -161,7 +165,11 @@ void TCPWrap::New(const FunctionCallbackInfo<Value>& args) {
     default:
       UNREACHABLE();
   }
-
+  /*
+    args.This()为v8提供的一个c++对象，
+    调用该c++对象的SetAlignedPointerInInternalField(0,this)关联this（new TCPWrap()）,
+    见HandleWrap
+  */
   new TCPWrap(env, args.This(), provider);
 }
 
@@ -278,6 +286,12 @@ void TCPWrap::Connect(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
 
   TCPWrap* wrap;
+  /*
+    args.Holder()代表Connect属于哪个所有者的，根据Initialize函数中的定义我们看到Connect函数
+    是属于cwt变量对应的实例模板创建出来的对象的，就是new TCPWrap(xxx, args.this())的args.this()
+    该对象之前通过SetAlignedPointerInInternalField(0,this)时关联了new TCPWrap对象。
+    现在通过SetAlignedPointerInInternalField(0)拿出来
+  */
   ASSIGN_OR_RETURN_UNWRAP(&wrap,
                           args.Holder(),
                           args.GetReturnValue().Set(UV_EBADF));
@@ -285,8 +299,9 @@ void TCPWrap::Connect(const FunctionCallbackInfo<Value>& args) {
   CHECK(args[0]->IsObject());
   CHECK(args[1]->IsString());
   CHECK(args[2]->IsUint32());
-
+  // 拿到报错了连接信息的对象
   Local<Object> req_wrap_obj = args[0].As<Object>();
+  // 要连接的ip和端口
   node::Utf8Value ip_address(env->isolate(), args[1]);
   int port = args[2]->Uint32Value();
 
@@ -296,6 +311,7 @@ void TCPWrap::Connect(const FunctionCallbackInfo<Value>& args) {
   if (err == 0) {
     AsyncHooks::DefaultTriggerAsyncIdScope trigger_scope(
       env, wrap->get_async_id());
+    // 把连接信息存到ConnectWrap里(把req_wrap_obj和Connect_wrap对象关联起来)，Connect_wrap代表一个连接
     ConnectWrap* req_wrap =
         new ConnectWrap(env, req_wrap_obj, AsyncWrap::PROVIDER_TCPCONNECTWRAP);
     err = uv_tcp_connect(req_wrap->req(),
