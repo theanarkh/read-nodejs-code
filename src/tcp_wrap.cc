@@ -74,15 +74,16 @@ void TCPWrap::Initialize(Local<Object> target,
                          Local<Context> context) {
   Environment* env = Environment::GetCurrent(context);
   /*
-    new TCP时，v8会新建一个c++对象，然后传进New函数，
+    new TCP时，v8会新建一个c++对象（根据InstanceTemplate()模板创建的对象），然后传进New函数，
     然后执行New函数，New函数的入参args的args.This()就是该c++对象
   */
   Local<FunctionTemplate> t = env->NewFunctionTemplate(New);
   Local<String> tcpString = FIXED_ONE_BYTE_STRING(env->isolate(), "TCP");
   t->SetClassName(tcpString);
+  // ObjectTemplateInfo对象的kDataOffset偏移保存了这个字段的值
   t->InstanceTemplate()->SetInternalFieldCount(1);
 
-  // Init properties
+  // Init properties  ObjectTemplateInfo对象的kPropertyListOffset偏移保存了下面这些值
   t->InstanceTemplate()->Set(FIXED_ONE_BYTE_STRING(env->isolate(), "reading"),
                              Boolean::New(env->isolate(), false));
   t->InstanceTemplate()->Set(env->owner_string(), Null(env->isolate()));
@@ -90,7 +91,7 @@ void TCPWrap::Initialize(Local<Object> target,
   t->InstanceTemplate()->Set(env->onconnection_string(), Null(env->isolate()));
 
   AsyncWrap::AddWrapMethods(env, t, AsyncWrap::kFlagHasReset);
-
+  // 在t的原型上增加属性
   env->SetProtoMethod(t, "close", HandleWrap::Close);
 
   env->SetProtoMethod(t, "ref", HandleWrap::Ref);
@@ -115,7 +116,7 @@ void TCPWrap::Initialize(Local<Object> target,
 #ifdef _WIN32
   env->SetProtoMethod(t, "setSimultaneousAccepts", SetSimultaneousAccepts);
 #endif
-
+  // 在context中注册该函数
   target->Set(tcpString, t->GetFunction());
   env->set_tcp_constructor_template(t);
 
@@ -125,6 +126,7 @@ void TCPWrap::Initialize(Local<Object> target,
     // args.This()是TCPConnectWrap对象。clearWrap是清除关联的对象（SetAlignedPointerInInternalField(0, null)）
     ClearWrap(args.This());
   };
+  // 又新建一个函数模板
   auto cwt = FunctionTemplate::New(env->isolate(), constructor);
   cwt->InstanceTemplate()->SetInternalFieldCount(1);
   AsyncWrap::AddWrapMethods(env, cwt);

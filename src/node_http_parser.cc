@@ -97,8 +97,9 @@ struct StringPtr {
     }
   }
 
-
+  // 重置字段
   void Reset() {
+    // 数据是在堆上分配的则free
     if (on_heap_) {
       delete[] str_;
       on_heap_ = false;
@@ -273,7 +274,7 @@ class Parser : public AsyncWrap, public StreamListener {
 
     // STATUS
     if (parser_.type == HTTP_RESPONSE) {
-      argv[A_STATUS_CODE] =
+      argv[A_STATUS_CODE] =lo
           Integer::New(env()->isolate(), parser_.status_code);
       argv[A_STATUS_MESSAGE] = status_message_.ToString(env());
     }
