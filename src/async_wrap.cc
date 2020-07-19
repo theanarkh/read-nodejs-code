@@ -738,7 +738,7 @@ void AsyncWrap::EmitAsyncInit(Environment* env,
   USE(init_fn->Call(env->context(), object, arraysize(argv), argv));
 }
 
-
+// 执行上层回调
 MaybeLocal<Value> AsyncWrap::MakeCallback(const Local<Function> cb,
                                           int argc,
                                           Local<Value>* argv) {

@@ -32,6 +32,7 @@ ConnectionWrap<WrapType, UVType>::ConnectionWrap(Environment* env,
 template <typename WrapType, typename UVType>
 void ConnectionWrap<WrapType, UVType>::OnConnection(uv_stream_t* handle,
                                                     int status) {
+  // TCPWrap                                                    
   WrapType* wrap_data = static_cast<WrapType*>(handle->data);
   CHECK_NE(wrap_data, nullptr);
   CHECK_EQ(&wrap_data->handle_, reinterpret_cast<UVType*>(handle));
@@ -51,28 +52,32 @@ void ConnectionWrap<WrapType, UVType>::OnConnection(uv_stream_t* handle,
 
   if (status == 0) {
     // Instantiate the client javascript object and handle.
+    // 新建一个表示和客户端通信的对象
     Local<Object> client_obj = WrapType::Instantiate(env,
                                                      wrap_data,
                                                      WrapType::SOCKET);
 
     // Unwrap the client javascript object.
     WrapType* wrap;
+    // 解包出一个TCPWrap对象存到wrap
     ASSIGN_OR_RETURN_UNWRAP(&wrap, client_obj);
     uv_stream_t* client_handle =
         reinterpret_cast<uv_stream_t*>(&wrap->handle_);
     // uv_accept can fail if the new connection has already been closed, in
     // which case an EAGAIN (resource temporarily unavailable) will be
     // returned.
+    // 把通信fd存储到client_handle中
     if (uv_accept(handle, client_handle))
       return;
 
     // Successful accept. Call the onconnection callback in JavaScript land.
     argv[1] = client_obj;
   }
+  // 回调上层的onconnection函数
   wrap_data->MakeCallback(env->onconnection_string(), arraysize(argv), argv);
 }
 
-
+// 主动发起连接，成功后的回调
 template <typename WrapType, typename UVType>
 void ConnectionWrap<WrapType, UVType>::AfterConnect(uv_connect_t* req,
                                                     int status) {

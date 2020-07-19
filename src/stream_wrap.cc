@@ -62,6 +62,7 @@ void LibuvStreamWrap::Initialize(Local<Object> target,
     CHECK(args.IsConstructCall());
     ClearWrap(args.This());
   };
+  // 新建一个函数模板
   Local<FunctionTemplate> sw =
       FunctionTemplate::New(env->isolate(), is_construct_call_callback);
   sw->InstanceTemplate()->SetInternalFieldCount(1);
@@ -69,6 +70,7 @@ void LibuvStreamWrap::Initialize(Local<Object> target,
       FIXED_ONE_BYTE_STRING(env->isolate(), "ShutdownWrap");
   sw->SetClassName(wrapString);
   AsyncWrap::AddWrapMethods(env, sw);
+  // 注册ShutdownWrap变量
   target->Set(wrapString, sw->GetFunction());
 
   Local<FunctionTemplate> ww =
@@ -78,6 +80,7 @@ void LibuvStreamWrap::Initialize(Local<Object> target,
       FIXED_ONE_BYTE_STRING(env->isolate(), "WriteWrap");
   ww->SetClassName(writeWrapString);
   AsyncWrap::AddWrapMethods(env, ww);
+  // 注册WriteWrap变量
   target->Set(writeWrapString, ww->GetFunction());
   env->set_write_wrap_constructor_function(ww->GetFunction());
 }
@@ -99,11 +102,13 @@ LibuvStreamWrap::LibuvStreamWrap(Environment* env,
 void LibuvStreamWrap::AddMethods(Environment* env,
                                  v8::Local<v8::FunctionTemplate> target,
                                  int flags) {
+  // 申请一个函数模板，执行get_write_queue_size的时候会执行GetWriteQueueSize                                 
   Local<FunctionTemplate> get_write_queue_size =
       FunctionTemplate::New(env->isolate(),
                             GetWriteQueueSize,
                             env->as_external(),
                             Signature::New(env->isolate(), target));
+  // 在原型上设置方法                          
   target->PrototypeTemplate()->SetAccessorProperty(
       env->write_queue_size_string(),
       get_write_queue_size,
@@ -113,7 +118,7 @@ void LibuvStreamWrap::AddMethods(Environment* env,
   StreamBase::AddMethods<LibuvStreamWrap>(env, target, flags);
 }
 
-
+// 获取流对应的文件描述符
 int LibuvStreamWrap::GetFD() {
   int fd = -1;
 #if !defined(_WIN32)
@@ -143,23 +148,25 @@ bool LibuvStreamWrap::IsIPCPipe() {
   return is_named_pipe_ipc();
 }
 
-
+// 注册读事件
 int LibuvStreamWrap::ReadStart() {
   return uv_read_start(stream(), [](uv_handle_t* handle,
                                     size_t suggested_size,
                                     uv_buf_t* buf) {
+    // 分配存储数据的内存                                  
     static_cast<LibuvStreamWrap*>(handle->data)->OnUvAlloc(suggested_size, buf);
   }, [](uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
+    // 读取数据成功的回调
     static_cast<LibuvStreamWrap*>(stream->data)->OnUvRead(nread, buf);
   });
 }
 
-
+// 解除可读事件
 int LibuvStreamWrap::ReadStop() {
   return uv_read_stop(stream());
 }
 
-
+// 分配内存存储数据
 void LibuvStreamWrap::OnUvAlloc(size_t suggested_size, uv_buf_t* buf) {
   HandleScope scope(env()->isolate());
   Context::Scope context_scope(env()->context());
@@ -174,15 +181,17 @@ static Local<Object> AcceptHandle(Environment* env, LibuvStreamWrap* parent) {
   EscapableHandleScope scope(env->isolate());
   Local<Object> wrap_obj;
   UVType* handle;
-
+  // 新建一个c++对象。该c++对象关联了一个WrapType对象
   wrap_obj = WrapType::Instantiate(env, parent, WrapType::SOCKET);
   if (wrap_obj.IsEmpty())
     return Local<Object>();
 
   WrapType* wrap;
+  // 把WrapType对象解包出来，存到wrap
   ASSIGN_OR_RETURN_UNWRAP(&wrap, wrap_obj, Local<Object>());
+  // 拿到WrapType对象的handle字段
   handle = wrap->UVHandle();
-
+  // 把通信fd存到handle中
   if (uv_accept(parent->stream(), reinterpret_cast<uv_stream_t*>(handle)))
     ABORT();
 
@@ -203,7 +212,7 @@ void LibuvStreamWrap::OnUvRead(ssize_t nread, const uv_buf_t* buf) {
   // We should not be getting this callback if someone as already called
   // uv_close() on the handle.
   CHECK_EQ(persistent().IsEmpty(), false);
-
+  // 成功读取
   if (nread > 0) {
     if (is_tcp()) {
       NODE_COUNT_NET_BYTES_RECV(nread);
@@ -233,7 +242,7 @@ void LibuvStreamWrap::OnUvRead(ssize_t nread, const uv_buf_t* buf) {
   EmitRead(nread, *buf);
 }
 
-
+// 获取写队列的字节数
 void LibuvStreamWrap::GetWriteQueueSize(
     const FunctionCallbackInfo<Value>& info) {
   LibuvStreamWrap* wrap;
@@ -248,7 +257,7 @@ void LibuvStreamWrap::GetWriteQueueSize(
   info.GetReturnValue().Set(write_queue_size);
 }
 
-
+// 设置非阻塞模式
 void LibuvStreamWrap::SetBlocking(const FunctionCallbackInfo<Value>& args) {
   LibuvStreamWrap* wrap;
   ASSIGN_OR_RETURN_UNWRAP(&wrap, args.Holder());
@@ -261,7 +270,7 @@ void LibuvStreamWrap::SetBlocking(const FunctionCallbackInfo<Value>& args) {
   args.GetReturnValue().Set(uv_stream_set_blocking(wrap->stream(), enable));
 }
 
-
+// 关闭写端
 int LibuvStreamWrap::DoShutdown(ShutdownWrap* req_wrap) {
   int err;
   err = uv_shutdown(req_wrap->req(), stream(), AfterUvShutdown);
@@ -269,7 +278,7 @@ int LibuvStreamWrap::DoShutdown(ShutdownWrap* req_wrap) {
   return err;
 }
 
-
+// 关闭写端成功后回调
 void LibuvStreamWrap::AfterUvShutdown(uv_shutdown_t* req, int status) {
   ShutdownWrap* req_wrap = ShutdownWrap::from_req(req);
   CHECK_NE(req_wrap, nullptr);
@@ -283,6 +292,7 @@ void LibuvStreamWrap::AfterUvShutdown(uv_shutdown_t* req, int status) {
 // values, shifting their base and decrementing their length. This is
 // required in order to skip the data that was successfully written via
 // uv_try_write().
+// 写数据
 int LibuvStreamWrap::DoTryWrite(uv_buf_t** bufs, size_t* count) {
   int err;
   size_t written;
@@ -318,12 +328,13 @@ int LibuvStreamWrap::DoTryWrite(uv_buf_t** bufs, size_t* count) {
   return 0;
 }
 
-
+// 写数据
 int LibuvStreamWrap::DoWrite(WriteWrap* w,
                         uv_buf_t* bufs,
                         size_t count,
                         uv_stream_t* send_handle) {
   int r;
+  // 需要传递描述符
   if (send_handle == nullptr) {
     r = uv_write(w->req(), stream(), bufs, count, AfterUvWrite);
   } else {

@@ -27,7 +27,7 @@ ReqWrap<T>::~ReqWrap() {
   CHECK_EQ(false, persistent().IsEmpty());
   persistent().Reset();
 }
-
+// 保存上下文
 template <typename T>
 void ReqWrap<T>::Dispatched() {
   req_.data = this;
