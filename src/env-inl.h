@@ -128,13 +128,17 @@ inline void Environment::AsyncHooks::push_async_ids(double async_id,
     CHECK_GE(async_id, -1);
     CHECK_GE(trigger_async_id, -1);
   }
-
+  // 内存是calloc分配的，默认是0
   uint32_t offset = fields_[kStackLength];
+  // 空间不够，则扩容
   if (offset * 2 >= async_ids_stack_.Length())
     grow_async_ids_stack();
+  // 把旧的值保存到栈上
   async_ids_stack_[2 * offset] = async_id_fields_[kExecutionAsyncId];
   async_ids_stack_[2 * offset + 1] = async_id_fields_[kTriggerAsyncId];
+  // 栈指针加一
   fields_[kStackLength] = fields_[kStackLength] + 1;
+  // 保存新的值
   async_id_fields_[kExecutionAsyncId] = async_id;
   async_id_fields_[kTriggerAsyncId] = trigger_async_id;
 }
@@ -163,7 +167,7 @@ inline bool Environment::AsyncHooks::pop_async_id(double async_id) {
     fflush(stderr);
     ABORT_NO_BACKTRACE();
   }
-
+  // 出栈，并把出栈内容保存到async_id_fields_
   uint32_t offset = fields_[kStackLength] - 1;
   async_id_fields_[kExecutionAsyncId] = async_ids_stack_[2 * offset];
   async_id_fields_[kTriggerAsyncId] = async_ids_stack_[2 * offset + 1];
@@ -171,7 +175,7 @@ inline bool Environment::AsyncHooks::pop_async_id(double async_id) {
 
   return fields_[kStackLength] > 0;
 }
-
+// 清除栈和async_id_fields_的值
 inline void Environment::AsyncHooks::clear_async_id_stack() {
   async_id_fields_[kExecutionAsyncId] = 0;
   async_id_fields_[kTriggerAsyncId] = 0;
@@ -185,7 +189,7 @@ inline Environment::AsyncHooks::DefaultTriggerAsyncIdScope
   if (env->async_hooks()->fields()[AsyncHooks::kCheck] > 0) {
     CHECK_GE(default_trigger_async_id, 0);
   }
-
+  // 保存旧的，赋值新的
   old_default_trigger_async_id_ =
     async_id_fields_ref_[AsyncHooks::kDefaultTriggerAsyncId];
   async_id_fields_ref_[AsyncHooks::kDefaultTriggerAsyncId] =

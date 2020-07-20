@@ -149,7 +149,7 @@ void TCPWrap::New(const FunctionCallbackInfo<Value>& args) {
   // This constructor should not be exposed to public javascript.
   // Therefore we assert that we are not trying to call this as a
   // normal function.
-  // 是否以构造函数的方式执行，即new TCPWrap
+  // 是否以构造函数的方式执行，即new TCP
   CHECK(args.IsConstructCall());
   CHECK(args[0]->IsInt32());
   Environment* env = Environment::GetCurrent(args);
