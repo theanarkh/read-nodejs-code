@@ -455,7 +455,7 @@ void AsyncWrap::GetAsyncId(const FunctionCallbackInfo<Value>& args) {
   args.GetReturnValue().Set(wrap->get_async_id());
 }
 
-// 压栈一组id
+// 压栈一组id,修改kExecutionAsyncId和kTriggerAsyncId
 void AsyncWrap::PushAsyncIds(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
   // No need for CHECK(IsNumber()) on args because if FromJust() doesn't fail
@@ -486,7 +486,7 @@ void AsyncWrap::AsyncReset(const FunctionCallbackInfo<Value>& args) {
   wrap->AsyncReset(execution_async_id);
 }
 
-
+// 触发destroy构子
 void AsyncWrap::QueueDestroyAsyncId(const FunctionCallbackInfo<Value>& args) {
   CHECK(args[0]->IsNumber());
   AsyncWrap::EmitDestroy(
@@ -681,8 +681,10 @@ void AsyncWrap::EmitDestroy(Environment* env, double async_id) {
 // and reused over their lifetime. This way a new uid can be assigned when
 // the resource is pulled out of the pool and put back into use.
 void AsyncWrap::AsyncReset(double execution_async_id, bool silent) {
+  // 没有传则申请一个新的
   async_id_ =
     execution_async_id == -1 ? env()->new_async_id() : execution_async_id;
+  // 触发者id，如果没有则是0
   trigger_async_id_ = env()->get_default_trigger_async_id();
 
   switch (provider_type()) {
