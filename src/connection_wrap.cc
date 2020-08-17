@@ -81,8 +81,10 @@ void ConnectionWrap<WrapType, UVType>::OnConnection(uv_stream_t* handle,
 template <typename WrapType, typename UVType>
 void ConnectionWrap<WrapType, UVType>::AfterConnect(uv_connect_t* req,
                                                     int status) {
+  // data字段指向了封装该结构体的c++对象                                                    
   ConnectWrap* req_wrap = static_cast<ConnectWrap*>(req->data);
   CHECK_NE(req_wrap, nullptr);
+  // handle的data字段指向了封装该handle结构体的c++对象
   WrapType* wrap = static_cast<WrapType*>(req->handle->data);
   CHECK_EQ(req_wrap->env(), wrap->env());
   Environment* env = wrap->env();

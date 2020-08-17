@@ -91,7 +91,7 @@ HandleWrap::HandleWrap(Environment* env,
     : AsyncWrap(env, object, provider),
       state_(kInitialized),
       handle_(handle) {
-  // 把子类对象挂载到handle的data字段上
+  // handle的data字段指向封装了该handle的类对象
   handle_->data = this;
   HandleScope scope(env->isolate());
   // 关联object和this对象，后续通过unwrap使用

@@ -9,7 +9,11 @@
 #include "util-inl.h"
 
 namespace node {
-
+/*
+  object对象的internalField指向ReqWrap族对象，
+  object对应的是js层一次请求的封装，ReqWrap族对象是对libuv的handle族结构体
+  的请求。libuv的请求族结构体的data指针指向封装了该handle结构体的c++对象
+*/
 template <typename T>
 ReqWrap<T>::ReqWrap(Environment* env,
                     v8::Local<v8::Object> object,
@@ -18,6 +22,7 @@ ReqWrap<T>::ReqWrap(Environment* env,
 
   // FIXME(bnoordhuis) The fact that a reinterpret_cast is needed is
   // arguably a good indicator that there should be more than one queue.
+  // 保存到env的请求队列
   env->req_wrap_queue()->PushBack(reinterpret_cast<ReqWrap<uv_req_t>*>(this));
 }
 
@@ -27,7 +32,7 @@ ReqWrap<T>::~ReqWrap() {
   CHECK_EQ(false, persistent().IsEmpty());
   persistent().Reset();
 }
-// 保存上下文
+// 保存上下文，libuv的请求族结构体的data指针指向封装了该结构体的c++对象
 template <typename T>
 void ReqWrap<T>::Dispatched() {
   req_.data = this;

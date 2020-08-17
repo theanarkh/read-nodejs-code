@@ -34,6 +34,7 @@ class ReqWrap : public AsyncWrap {
   // so req_wrap_queue_ would no longer be at a fixed offset if it came after
   // req_. For more information please refer to
   // `doc/guides/node-postmortem-support.md`
+  // 对libuv请求族结构体的抽象
   T req_;
 };
 
