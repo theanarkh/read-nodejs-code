@@ -70,14 +70,17 @@ void PipeWrap::Initialize(Local<Object> target,
                           Local<Value> unused,
                           Local<Context> context) {
   Environment* env = Environment::GetCurrent(context);
-
+  // 新建一个函数模板，执行该函数模板生成的函数时会执行New函数
   Local<FunctionTemplate> t = env->NewFunctionTemplate(New);
+  // 暴露给js层的名称
   Local<String> pipeString = FIXED_ONE_BYTE_STRING(env->isolate(), "Pipe");
+  // 函数名
   t->SetClassName(pipeString);
+  // 对象布局中，需要额外拓展的内存
   t->InstanceTemplate()->SetInternalFieldCount(1);
 
   AsyncWrap::AddWrapMethods(env, t);
-
+  // 原型方法
   env->SetProtoMethod(t, "close", HandleWrap::Close);
   env->SetProtoMethod(t, "unref", HandleWrap::Unref);
   env->SetProtoMethod(t, "ref", HandleWrap::Ref);
@@ -97,8 +100,9 @@ void PipeWrap::Initialize(Local<Object> target,
 #ifdef _WIN32
   env->SetProtoMethod(t, "setPendingInstances", SetPendingInstances);
 #endif
-
+  // 导出
   target->Set(pipeString, t->GetFunction());
+  // 缓存起来
   env->set_pipe_constructor_template(t);
 
   // Create FunctionTemplate for PipeConnectWrap.
@@ -106,16 +110,22 @@ void PipeWrap::Initialize(Local<Object> target,
     CHECK(args.IsConstructCall());
     ClearWrap(args.This());
   };
+  // 新建一个函数模板
   auto cwt = FunctionTemplate::New(env->isolate(), constructor);
+  // 对象需要额外的内存
   cwt->InstanceTemplate()->SetInternalFieldCount(1);
   AsyncWrap::AddWrapMethods(env, cwt);
+  // 导出名称
   Local<String> wrapString =
       FIXED_ONE_BYTE_STRING(env->isolate(), "PipeConnectWrap");
   cwt->SetClassName(wrapString);
+  // 导出
   target->Set(wrapString, cwt->GetFunction());
 
   // Define constants
+  // 新建一个对象
   Local<Object> constants = Object::New(env->isolate());
+  // 定义并导出常量
   NODE_DEFINE_CONSTANT(constants, SOCKET);
   NODE_DEFINE_CONSTANT(constants, SERVER);
   NODE_DEFINE_CONSTANT(constants, IPC);
