@@ -229,12 +229,14 @@ void PipeWrap::Connect(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
 
   PipeWrap* wrap;
+  // 通过Connect方法的holder拿到一个PipeWrap对象，在new PipeWrap的时候关联的
   ASSIGN_OR_RETURN_UNWRAP(&wrap, args.Holder());
 
   CHECK(args[0]->IsObject());
   CHECK(args[1]->IsString());
-
+  // PipeConnectWrap对象
   Local<Object> req_wrap_obj = args[0].As<Object>();
+  // unix域路径
   node::Utf8Value name(env->isolate(), args[1]);
 
   ConnectWrap* req_wrap =

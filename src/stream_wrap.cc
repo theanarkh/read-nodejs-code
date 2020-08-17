@@ -102,13 +102,13 @@ LibuvStreamWrap::LibuvStreamWrap(Environment* env,
 void LibuvStreamWrap::AddMethods(Environment* env,
                                  v8::Local<v8::FunctionTemplate> target,
                                  int flags) {
-  // 申请一个函数模板，执行get_write_queue_size的时候会执行GetWriteQueueSize                                 
+  // 申请一个函数模板，执行get_write_queue_size的时候会执行GetWriteQueueSize
   Local<FunctionTemplate> get_write_queue_size =
       FunctionTemplate::New(env->isolate(),
                             GetWriteQueueSize,
                             env->as_external(),
                             Signature::New(env->isolate(), target));
-  // 在原型上设置方法                          
+  // 在原型上设置方法
   target->PrototypeTemplate()->SetAccessorProperty(
       env->write_queue_size_string(),
       get_write_queue_size,
@@ -153,7 +153,7 @@ int LibuvStreamWrap::ReadStart() {
   return uv_read_start(stream(), [](uv_handle_t* handle,
                                     size_t suggested_size,
                                     uv_buf_t* buf) {
-    // 分配存储数据的内存                                  
+    // 分配存储数据的内存
     static_cast<LibuvStreamWrap*>(handle->data)->OnUvAlloc(suggested_size, buf);
   }, [](uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
     // 读取数据成功的回调
