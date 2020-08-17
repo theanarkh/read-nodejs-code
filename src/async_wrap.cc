@@ -193,10 +193,10 @@ void AsyncWrap::EmitTraceEventBefore() {
   }
 }
 
-
+// 执行用户传的before函数
 void AsyncWrap::EmitBefore(Environment* env, double async_id) {
   AsyncHooks* async_hooks = env->async_hooks();
-
+  // 在js层设置的
   if (async_hooks->fields()[AsyncHooks::kBefore] == 0)
     return;
 
@@ -355,7 +355,7 @@ static void SetupHooks(const FunctionCallbackInfo<Value>& args) {
   // internally, so this should every only be called once. At which time all
   // the functions should be set. Detect this by checking if init !IsEmpty().
   CHECK(env->async_hooks_init_function().IsEmpty());
-
+  // 是一个对象{init: funcition, before: function....}
   Local<Object> fn_obj = args[0].As<Object>();
 
 #define SET_HOOK_FN(name)                                                     \
@@ -447,7 +447,7 @@ static void RegisterDestroyHook(const FunctionCallbackInfo<Value>& args) {
     p, AsyncWrap::WeakCallback, v8::WeakCallbackType::kParameter);
 }
 
-
+// 获取包裹的对象的async_id
 void AsyncWrap::GetAsyncId(const FunctionCallbackInfo<Value>& args) {
   AsyncWrap* wrap;
   args.GetReturnValue().Set(-1);
@@ -455,7 +455,7 @@ void AsyncWrap::GetAsyncId(const FunctionCallbackInfo<Value>& args) {
   args.GetReturnValue().Set(wrap->get_async_id());
 }
 
-
+// 压栈一组id,修改kExecutionAsyncId和kTriggerAsyncId
 void AsyncWrap::PushAsyncIds(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
   // No need for CHECK(IsNumber()) on args because if FromJust() doesn't fail
@@ -465,14 +465,14 @@ void AsyncWrap::PushAsyncIds(const FunctionCallbackInfo<Value>& args) {
   env->async_hooks()->push_async_ids(async_id, trigger_async_id);
 }
 
-
+// 出栈一组id
 void AsyncWrap::PopAsyncIds(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
   double async_id = args[0]->NumberValue(env->context()).FromJust();
   args.GetReturnValue().Set(env->async_hooks()->pop_async_id(async_id));
 }
 
-
+// 清除所有数据
 void AsyncWrap::ClearAsyncIdStack(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
   env->async_hooks()->clear_async_id_stack();
@@ -486,13 +486,13 @@ void AsyncWrap::AsyncReset(const FunctionCallbackInfo<Value>& args) {
   wrap->AsyncReset(execution_async_id);
 }
 
-
+// 触发destroy构子
 void AsyncWrap::QueueDestroyAsyncId(const FunctionCallbackInfo<Value>& args) {
   CHECK(args[0]->IsNumber());
   AsyncWrap::EmitDestroy(
       Environment::GetCurrent(args), args[0]->NumberValue());
 }
-
+// 在函数模板上设置两个函数，执行这两个函数的时候，是操作函数模板生成的函数所创建的对象里，包裹的那个对象的id
 void AsyncWrap::AddWrapMethods(Environment* env,
                                Local<FunctionTemplate> constructor,
                                int flag) {
@@ -507,9 +507,9 @@ void AsyncWrap::Initialize(Local<Object> target,
   Environment* env = Environment::GetCurrent(context);
   Isolate* isolate = env->isolate();
   HandleScope scope(isolate);
-
+  // 注册退出时执行的函数
   env->BeforeExit(DestroyAsyncIdsCallback, env);
-
+  // 设置对象的属性，值是函数
   env->SetMethod(target, "setupHooks", SetupHooks);
   env->SetMethod(target, "pushAsyncIds", PushAsyncIds);
   env->SetMethod(target, "popAsyncIds", PopAsyncIds);
@@ -553,7 +553,7 @@ void AsyncWrap::Initialize(Local<Object> target,
   target->Set(context,
               env->async_ids_stack_string(),
               env->async_hooks()->async_ids_stack().GetJSArray()).FromJust();
-
+  // 导出AsyncHooks的常量，在env.h中AsyncHooks类定义
   Local<Object> constants = Object::New(isolate);
 #define SET_HOOKS_CONSTANT(name)                                              \
   FORCE_SET_TARGET_FIELD(                                                     \
@@ -573,7 +573,7 @@ void AsyncWrap::Initialize(Local<Object> target,
   SET_HOOKS_CONSTANT(kStackLength);
 #undef SET_HOOKS_CONSTANT
   FORCE_SET_TARGET_FIELD(target, "constants", constants);
-
+  // 定义type
   Local<Object> async_providers = Object::New(isolate);
 #define V(p)                                                                  \
   FORCE_SET_TARGET_FIELD(                                                     \
@@ -646,7 +646,7 @@ AsyncWrap::AsyncWrap(Environment* env,
   AsyncReset(-1, silent);
 }
 
-
+// 析构执行destroy函数
 AsyncWrap::~AsyncWrap() {
   EmitTraceEventDestroy();
   EmitDestroy(env(), get_async_id());
@@ -669,7 +669,6 @@ void AsyncWrap::EmitTraceEventDestroy() {
 void AsyncWrap::EmitDestroy(Environment* env, double async_id) {
   if (env->async_hooks()->fields()[AsyncHooks::kDestroy] == 0)
     return;
-
   if (env->destroy_async_id_list()->empty()) {
     env->SetUnrefImmediate(DestroyAsyncIdsCallback, nullptr);
   }
@@ -682,8 +681,10 @@ void AsyncWrap::EmitDestroy(Environment* env, double async_id) {
 // and reused over their lifetime. This way a new uid can be assigned when
 // the resource is pulled out of the pool and put back into use.
 void AsyncWrap::AsyncReset(double execution_async_id, bool silent) {
+  // 没有传则申请一个新的
   async_id_ =
     execution_async_id == -1 ? env()->new_async_id() : execution_async_id;
+  // 触发者id，如果没有则是0
   trigger_async_id_ = env()->get_default_trigger_async_id();
 
   switch (provider_type()) {
@@ -720,6 +721,7 @@ void AsyncWrap::EmitAsyncInit(Environment* env,
   AsyncHooks* async_hooks = env->async_hooks();
 
   // Nothing to execute, so can continue normally.
+  // 用户没有设置init函数
   if (async_hooks->fields()[AsyncHooks::kInit] == 0) {
     return;
   }
@@ -733,12 +735,12 @@ void AsyncWrap::EmitAsyncInit(Environment* env,
     Number::New(env->isolate(), trigger_async_id),
     object,
   };
-
+  // 执行用户的init函数
   FatalTryCatch try_catch(env);
   USE(init_fn->Call(env->context(), object, arraysize(argv), argv));
 }
 
-
+// 执行上层回调
 MaybeLocal<Value> AsyncWrap::MakeCallback(const Local<Function> cb,
                                           int argc,
                                           Local<Value>* argv) {

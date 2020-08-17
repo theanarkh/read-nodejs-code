@@ -128,13 +128,17 @@ inline void Environment::AsyncHooks::push_async_ids(double async_id,
     CHECK_GE(async_id, -1);
     CHECK_GE(trigger_async_id, -1);
   }
-
+  // 内存是calloc分配的，默认是0
   uint32_t offset = fields_[kStackLength];
+  // 空间不够，则扩容
   if (offset * 2 >= async_ids_stack_.Length())
     grow_async_ids_stack();
+  // 把旧的值保存到栈上
   async_ids_stack_[2 * offset] = async_id_fields_[kExecutionAsyncId];
   async_ids_stack_[2 * offset + 1] = async_id_fields_[kTriggerAsyncId];
+  // 栈指针加一
   fields_[kStackLength] = fields_[kStackLength] + 1;
+  // 保存新的值
   async_id_fields_[kExecutionAsyncId] = async_id;
   async_id_fields_[kTriggerAsyncId] = trigger_async_id;
 }
@@ -163,7 +167,7 @@ inline bool Environment::AsyncHooks::pop_async_id(double async_id) {
     fflush(stderr);
     ABORT_NO_BACKTRACE();
   }
-
+  // 出栈，并把出栈内容保存到async_id_fields_
   uint32_t offset = fields_[kStackLength] - 1;
   async_id_fields_[kExecutionAsyncId] = async_ids_stack_[2 * offset];
   async_id_fields_[kTriggerAsyncId] = async_ids_stack_[2 * offset + 1];
@@ -171,13 +175,13 @@ inline bool Environment::AsyncHooks::pop_async_id(double async_id) {
 
   return fields_[kStackLength] > 0;
 }
-
+// 清除栈和async_id_fields_的值
 inline void Environment::AsyncHooks::clear_async_id_stack() {
   async_id_fields_[kExecutionAsyncId] = 0;
   async_id_fields_[kTriggerAsyncId] = 0;
   fields_[kStackLength] = 0;
 }
-
+// 新的default_trigger_async_id，一般是父handle的async_id，即触发者的async_id 
 inline Environment::AsyncHooks::DefaultTriggerAsyncIdScope
   ::DefaultTriggerAsyncIdScope(Environment* env,
                                double default_trigger_async_id)
@@ -185,7 +189,7 @@ inline Environment::AsyncHooks::DefaultTriggerAsyncIdScope
   if (env->async_hooks()->fields()[AsyncHooks::kCheck] > 0) {
     CHECK_GE(default_trigger_async_id, 0);
   }
-
+  // 保存旧的，赋值新的
   old_default_trigger_async_id_ =
     async_id_fields_ref_[AsyncHooks::kDefaultTriggerAsyncId];
   async_id_fields_ref_[AsyncHooks::kDefaultTriggerAsyncId] =
@@ -462,13 +466,13 @@ bool Environment::inside_should_not_abort_on_uncaught_scope() const {
 inline std::vector<double>* Environment::destroy_async_id_list() {
   return &destroy_async_id_list_;
 }
-
+// 管理async_id
 inline double Environment::new_async_id() {
   async_hooks()->async_id_fields()[AsyncHooks::kAsyncIdCounter] =
     async_hooks()->async_id_fields()[AsyncHooks::kAsyncIdCounter] + 1;
   return async_hooks()->async_id_fields()[AsyncHooks::kAsyncIdCounter];
 }
-
+// 当前的handle的async_id，默认是0
 inline double Environment::execution_async_id() {
   return async_hooks()->async_id_fields()[AsyncHooks::kExecutionAsyncId];
 }
@@ -481,7 +485,9 @@ inline double Environment::get_default_trigger_async_id() {
   double default_trigger_async_id =
     async_hooks()->async_id_fields()[AsyncHooks::kDefaultTriggerAsyncId];
   // If defaultTriggerAsyncId isn't set, use the executionAsyncId
+  // 默认是-1
   if (default_trigger_async_id < 0)
+    // execution_async_id默认是0（calloc） 
     default_trigger_async_id = execution_async_id();
   return default_trigger_async_id;
 }

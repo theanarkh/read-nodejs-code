@@ -34,7 +34,7 @@ using v8::Local;
 using v8::Object;
 using v8::Value;
 
-
+// 操作handle属性的一系列函数
 void HandleWrap::Ref(const FunctionCallbackInfo<Value>& args) {
   HandleWrap* wrap;
   ASSIGN_OR_RETURN_UNWRAP(&wrap, args.Holder());
@@ -91,9 +91,12 @@ HandleWrap::HandleWrap(Environment* env,
     : AsyncWrap(env, object, provider),
       state_(kInitialized),
       handle_(handle) {
+  // 把子类对象挂载到handle的data字段上
   handle_->data = this;
   HandleScope scope(env->isolate());
+  // 关联object和this对象，后续通过unwrap使用
   Wrap(object, this);
+  // 入队
   env->handle_wrap_queue()->PushBack(this);
 }
 
@@ -115,10 +118,10 @@ void HandleWrap::OnClose(uv_handle_t* handle) {
 
   const bool have_close_callback = (wrap->state_ == kClosingWithCallback);
   wrap->state_ = kClosed;
-  
+  // 执行回调
   if (have_close_callback)
     wrap->MakeCallback(env->onclose_string(), 0, nullptr);
-
+  // 解除关联关系
   ClearWrap(wrap->object());
   wrap->persistent().Reset();
   delete wrap;

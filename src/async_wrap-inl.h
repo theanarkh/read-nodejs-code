@@ -44,7 +44,7 @@ inline double AsyncWrap::get_trigger_async_id() const {
   return trigger_async_id_;
 }
 
-
+// 执行上层回调
 inline v8::MaybeLocal<v8::Value> AsyncWrap::MakeCallback(
     const v8::Local<v8::String> symbol,
     int argc,

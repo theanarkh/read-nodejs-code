@@ -37,6 +37,7 @@ inline BaseObject::BaseObject(Environment* env, v8::Local<v8::Object> handle)
   CHECK_EQ(false, handle.IsEmpty());
   // The zero field holds a pointer to the handle. Immediately set it to
   // nullptr in case it's accessed by the user before construction is complete.
+  // 初始化内部域指针
   if (handle->InternalFieldCount() > 0)
     handle->SetAlignedPointerInInternalField(0, nullptr);
 }

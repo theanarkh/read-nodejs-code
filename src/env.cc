@@ -128,7 +128,7 @@ void Environment::Start(int argc,
   if (start_profiler_idle_notifier) {
     StartProfilerIdleNotifier();
   }
-  // 利用v8新建一个函数
+  // 利用v8新建一个函数模板
   auto process_template = FunctionTemplate::New(isolate());
   // 设置函数名
   process_template->SetClassName(FIXED_ONE_BYTE_STRING(isolate(), "process"));

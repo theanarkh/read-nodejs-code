@@ -52,7 +52,7 @@ using v8::Value;
 
 using AsyncHooks = Environment::AsyncHooks;
 
-
+// 新建一个c++对象，他关联一个TCPWrap对象
 Local<Object> TCPWrap::Instantiate(Environment* env,
                                    AsyncWrap* parent,
                                    TCPWrap::SocketType type) {
@@ -116,7 +116,7 @@ void TCPWrap::Initialize(Local<Object> target,
 #ifdef _WIN32
   env->SetProtoMethod(t, "setSimultaneousAccepts", SetSimultaneousAccepts);
 #endif
-  // 在context中注册该函数
+  // 在target中注册该函数
   target->Set(tcpString, t->GetFunction());
   env->set_tcp_constructor_template(t);
 
@@ -144,11 +144,12 @@ void TCPWrap::Initialize(Local<Object> target,
               constants).FromJust();
 }
 
-
+// 执行new TCP时执行
 void TCPWrap::New(const FunctionCallbackInfo<Value>& args) {
   // This constructor should not be exposed to public javascript.
   // Therefore we assert that we are not trying to call this as a
   // normal function.
+  // 是否以构造函数的方式执行，即new TCP
   CHECK(args.IsConstructCall());
   CHECK(args[0]->IsInt32());
   Environment* env = Environment::GetCurrent(args);
@@ -168,7 +169,7 @@ void TCPWrap::New(const FunctionCallbackInfo<Value>& args) {
       UNREACHABLE();
   }
   /*
-    args.This()为v8提供的一个c++对象，
+    args.This()为v8提供的一个c++对象（由Initialize函数定义的模块创建的）
     调用该c++对象的SetAlignedPointerInInternalField(0,this)关联this（new TCPWrap()）,
     见HandleWrap
   */
@@ -357,6 +358,7 @@ void TCPWrap::Connect6(const FunctionCallbackInfo<Value>& args) {
                          &wrap->handle_,
                          reinterpret_cast<const sockaddr*>(&addr),
                          AfterConnect);
+    // 保存this到req_wrap->data中
     req_wrap->Dispatched();
     if (err)
       delete req_wrap;
