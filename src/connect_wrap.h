@@ -9,7 +9,7 @@
 #include "v8.h"
 
 namespace node {
-// 对handle发起一次请求的封装
+// 对libuv handle发起一次请求的封装
 class ConnectWrap : public ReqWrap<uv_connect_t> {
  public:
   ConnectWrap(Environment* env,

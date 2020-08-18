@@ -96,7 +96,7 @@ HandleWrap::HandleWrap(Environment* env,
   HandleScope scope(env->isolate());
   // 关联object和this对象，后续通过unwrap使用
   Wrap(object, this);
-  // 入队
+  // 插入handle队列
   env->handle_wrap_queue()->PushBack(this);
 }
 
