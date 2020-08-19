@@ -203,9 +203,10 @@ void LibuvStreamWrap::OnUvRead(ssize_t nread, const uv_buf_t* buf) {
   HandleScope scope(env()->isolate());
   Context::Scope context_scope(env()->context());
   uv_handle_type type = UV_UNKNOWN_HANDLE;
-
+  // 是unix域，并且作为ipc使用，传递的文件描述符大于0，说明不仅有数据，还有传递过来文件描述符
   if (is_named_pipe_ipc() &&
       uv_pipe_pending_count(reinterpret_cast<uv_pipe_t*>(stream())) > 0) {
+    // 当前待读取的fd的类型
     type = uv_pipe_pending_type(reinterpret_cast<uv_pipe_t*>(stream()));
   }
 
@@ -221,7 +222,7 @@ void LibuvStreamWrap::OnUvRead(ssize_t nread, const uv_buf_t* buf) {
     }
 
     Local<Object> pending_obj;
-
+    // 传递的描述符的类型
     if (type == UV_TCP) {
       pending_obj = AcceptHandle<TCPWrap, uv_tcp_t>(env(), this);
     } else if (type == UV_NAMED_PIPE) {
