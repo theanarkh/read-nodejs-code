@@ -1016,7 +1016,7 @@ static ssize_t uv__fs_buf_iter(uv_fs_t* req, uv__fs_buf_iter_processor process) 
   uv_buf_t* bufs;
   ssize_t total;
   ssize_t result;
-
+  // 最多能写的个数
   iovmax = uv__getiovmax();
   nbufs = req->nbufs;
   bufs = req->bufs;
@@ -1036,7 +1036,7 @@ static ssize_t uv__fs_buf_iter(uv_fs_t* req, uv__fs_buf_iter_processor process) 
 
     if (req->off >= 0)
       req->off += result;
-
+    // 一次可能没写完
     req->bufs += req->nbufs;
     nbufs -= req->nbufs;
     total += result;

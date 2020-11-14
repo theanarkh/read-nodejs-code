@@ -59,11 +59,12 @@ void HandleWrap::HasRef(const FunctionCallbackInfo<Value>& args) {
   args.GetReturnValue().Set(HasRef(wrap));
 }
 
-
+// 关闭一个handle
 void HandleWrap::Close(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
 
   HandleWrap* wrap;
+  // 拿到需要关闭的handle所在的c++对象
   ASSIGN_OR_RETURN_UNWRAP(&wrap, args.Holder());
 
   // Guard against uninitialized handle or double close.
@@ -74,11 +75,14 @@ void HandleWrap::Close(const FunctionCallbackInfo<Value>& args) {
     return;
 
   CHECK_EQ(false, wrap->persistent().IsEmpty());
+  // 关闭底层资源和解除注册的事件，关闭后在libuv close阶段执行OnClose  
   uv_close(wrap->handle_, OnClose);
+  // 修改状态
   wrap->state_ = kClosing;
-
+  // 执行回调onclose
   if (args[0]->IsFunction()) {
     wrap->object()->Set(env->onclose_string(), args[0]);
+    // 需要执行js回调，见OnClose
     wrap->state_ = kClosingWithCallback;
   }
 }
@@ -107,6 +111,7 @@ HandleWrap::~HandleWrap() {
 
 
 void HandleWrap::OnClose(uv_handle_t* handle) {
+  // handle关联的c++对象，该c++对象封装了handle
   HandleWrap* wrap = static_cast<HandleWrap*>(handle->data);
   Environment* env = wrap->env();
   HandleScope scope(env->isolate());
@@ -118,7 +123,7 @@ void HandleWrap::OnClose(uv_handle_t* handle) {
 
   const bool have_close_callback = (wrap->state_ == kClosingWithCallback);
   wrap->state_ = kClosed;
-  // 执行回调
+  // 执行js回调
   if (have_close_callback)
     wrap->MakeCallback(env->onclose_string(), 0, nullptr);
   // 解除关联关系

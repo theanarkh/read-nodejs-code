@@ -200,7 +200,6 @@ int StreamBase::Writev(const FunctionCallbackInfo<Value>& args) {
       goto done;
     }
   }
-
   err = DoWrite(req_wrap, buf_list, count, nullptr);
   req_wrap_obj->Set(env->async(), True(env->isolate()));
 
